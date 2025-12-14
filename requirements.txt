@@ -1,0 +1,8 @@
+paddlepaddle
+paddleocr
+pdf2image
+Pillow
+openpyxl
+requests
+python-dotenv
+PyMuPDF
