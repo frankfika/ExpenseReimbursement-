@@ -6,3 +6,4 @@ openpyxl
 requests
 python-dotenv
 PyMuPDF
+flask>=2.3.0

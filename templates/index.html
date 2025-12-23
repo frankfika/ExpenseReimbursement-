@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invoice Assistant - Smart Receipt Processing</title>
+    <meta name="description" content="Upload invoices, auto-recognize and categorize, download organized results with Excel report.">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <!-- Google AdSense - Replace with your code after approval -->
+    <!-- <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-YOUR_ID" crossorigin="anonymous"></script> -->
+</head>
+<body>
+    <div class="page-wrapper">
+        <div class="container">
+            <header>
+                <h1>Invoice Assistant</h1>
+                <p class="subtitle">Upload invoices. Auto-recognize. Download organized results.</p>
+            </header>
+
+            {% if not configured %}
+            <div class="warning-banner">
+                <strong>Warning:</strong> API Key not configured. Please run setup wizard in terminal.
+            </div>
+            {% endif %}
+
+            <!-- Ad Slot - Top -->
+            <div class="ad-container" id="ad-top">
+                <!-- AdSense code will go here after approval -->
+                <!-- <ins class="adsbygoogle" style="display:block" data-ad-client="ca-pub-YOUR_ID" data-ad-slot="YOUR_SLOT" data-ad-format="horizontal" data-full-width-responsive="true"></ins>
+                <script>(adsbygoogle = window.adsbygoogle || []).push({});</script> -->
+            </div>
+
+            <!-- Upload Section -->
+            <div id="upload-section" class="section">
+                <div id="drop-zone" class="drop-zone">
+                    <div class="drop-zone-content">
+                        <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"></path>
+                            <path d="M12 4v12m0-12L8 8m4-4l4 4"></path>
+                        </svg>
+                        <p class="drop-text">Drop files or folders here</p>
+                        <p class="drop-subtext">or click to browse</p>
+                        <p class="drop-hint">Supports JPG, PNG, PDF</p>
+                        <div class="upload-buttons">
+                            <button type="button" id="select-files-btn" class="btn btn-outline">Select Files</button>
+                            <button type="button" id="select-folder-btn" class="btn btn-outline">Select Folder</button>
+                        </div>
+                    </div>
+                    <input type="file" id="file-input" multiple accept=".jpg,.jpeg,.png,.bmp,.tiff,.webp,.pdf">
+                    <input type="file" id="folder-input" webkitdirectory multiple>
+                </div>
+
+                <!-- Selected Files -->
+                <div id="file-list" class="file-list hidden">
+                    <h3>Selected Files (<span id="file-count">0</span>)</h3>
+                    <ul id="files-ul"></ul>
+                    <div class="button-group">
+                        <button id="clear-btn" class="btn btn-secondary">Clear</button>
+                        <button id="upload-btn" class="btn btn-primary">Process</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Progress -->
+            <div id="progress-section" class="section progress-section hidden">
+                <h2>Processing...</h2>
+                <div class="progress-container">
+                    <div class="progress-bar">
+                        <div id="progress-fill" class="progress-fill"></div>
+                    </div>
+                    <p id="progress-text" class="progress-text">Preparing...</p>
+                </div>
+                <p id="current-file" class="current-file"></p>
+            </div>
+
+            <!-- Results -->
+            <div id="result-section" class="section result-section hidden">
+                <h2>Complete</h2>
+                <div class="summary">
+                    <h3>Summary</h3>
+                    <table id="summary-table">
+                        <thead>
+                            <tr>
+                                <th>Category</th>
+                                <th>Count</th>
+                                <th>Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody id="summary-body">
+                        </tbody>
+                        <tfoot>
+                            <tr class="total-row">
+                                <td>Total</td>
+                                <td id="total-count">-</td>
+                                <td id="total-amount">-</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+                <div class="button-group">
+                    <button id="download-btn" class="btn btn-primary btn-large">Download Results (ZIP)</button>
+                    <button id="restart-btn" class="btn btn-secondary">Process New</button>
+                </div>
+                <p class="privacy-note">Files auto-delete after 1 minute for your privacy</p>
+            </div>
+
+            <!-- Error -->
+            <div id="error-section" class="section error-section hidden">
+                <h2>Error</h2>
+                <p id="error-message" class="error-message"></p>
+                <button id="retry-btn" class="btn btn-primary">Try Again</button>
+            </div>
+
+            <!-- Ad Slot - Bottom -->
+            <div class="ad-container" id="ad-bottom">
+                <!-- AdSense code will go here after approval -->
+            </div>
+        </div>
+
+        <footer>
+            <p>AI-Powered Invoice Recognition & Organization</p>
+            <div class="footer-links">
+                <a href="/privacy">Privacy Policy</a>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        // State
+        let selectedFiles = [];
+        let currentTaskId = null;
+        let pollInterval = null;
+
+        // Category name mapping
+        const categoryNames = {
+            '打车票': 'Transportation',
+            '火车飞机票': 'Travel',
+            '住宿费': 'Accommodation',
+            '餐费': 'Meals',
+            '其他': 'Other'
+        };
+
+        // DOM Elements
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const folderInput = document.getElementById('folder-input');
+        const selectFilesBtn = document.getElementById('select-files-btn');
+        const selectFolderBtn = document.getElementById('select-folder-btn');
+        const fileList = document.getElementById('file-list');
+        const filesUl = document.getElementById('files-ul');
+        const fileCount = document.getElementById('file-count');
+        const uploadBtn = document.getElementById('upload-btn');
+        const clearBtn = document.getElementById('clear-btn');
+
+        const uploadSection = document.getElementById('upload-section');
+        const progressSection = document.getElementById('progress-section');
+        const resultSection = document.getElementById('result-section');
+        const errorSection = document.getElementById('error-section');
+
+        const progressFill = document.getElementById('progress-fill');
+        const progressText = document.getElementById('progress-text');
+        const currentFile = document.getElementById('current-file');
+
+        const summaryBody = document.getElementById('summary-body');
+        const totalCount = document.getElementById('total-count');
+        const totalAmount = document.getElementById('total-amount');
+        const downloadBtn = document.getElementById('download-btn');
+        const restartBtn = document.getElementById('restart-btn');
+        const retryBtn = document.getElementById('retry-btn');
+        const errorMessage = document.getElementById('error-message');
+
+        // Drag & Drop
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+
+        dropZone.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+
+            const items = e.dataTransfer.items;
+            if (items && items.length > 0) {
+                const files = await getAllFiles(items);
+                handleFiles(files);
+            } else {
+                handleFiles(e.dataTransfer.files);
+            }
+        });
+
+        // Recursive file traversal
+        async function getAllFiles(items) {
+            const files = [];
+
+            async function traverseEntry(entry) {
+                if (entry.isFile) {
+                    return new Promise((resolve) => {
+                        entry.file((file) => {
+                            files.push(file);
+                            resolve();
+                        });
+                    });
+                } else if (entry.isDirectory) {
+                    const reader = entry.createReader();
+                    return new Promise((resolve) => {
+                        reader.readEntries(async (entries) => {
+                            for (const e of entries) {
+                                await traverseEntry(e);
+                            }
+                            resolve();
+                        });
+                    });
+                }
+            }
+
+            for (const item of items) {
+                const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
+                if (entry) {
+                    await traverseEntry(entry);
+                } else if (item.kind === 'file') {
+                    files.push(item.getAsFile());
+                }
+            }
+
+            return files;
+        }
+
+        // Button events
+        selectFilesBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            fileInput.click();
+        });
+
+        selectFolderBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            folderInput.click();
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            handleFiles(e.target.files);
+        });
+
+        folderInput.addEventListener('change', (e) => {
+            handleFiles(e.target.files);
+        });
+
+        // Handle selected files
+        function handleFiles(files) {
+            const allowedTypes = ['image/jpeg', 'image/png', 'image/bmp', 'image/tiff', 'image/webp', 'application/pdf'];
+            const allowedExtensions = ['.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.webp', '.pdf'];
+
+            for (const file of files) {
+                const ext = '.' + file.name.split('.').pop().toLowerCase();
+                if (allowedTypes.includes(file.type) || allowedExtensions.includes(ext)) {
+                    if (!selectedFiles.find(f => f.name === file.name && f.size === file.size)) {
+                        selectedFiles.push(file);
+                    }
+                }
+            }
+
+            updateFileList();
+        }
+
+        // Update file list display
+        function updateFileList() {
+            if (selectedFiles.length === 0) {
+                fileList.classList.add('hidden');
+                return;
+            }
+
+            fileList.classList.remove('hidden');
+            fileCount.textContent = selectedFiles.length;
+            filesUl.innerHTML = '';
+
+            selectedFiles.forEach((file, index) => {
+                const li = document.createElement('li');
+                const size = (file.size / 1024).toFixed(1);
+                li.innerHTML = `
+                    <span class="file-name">${file.name}</span>
+                    <span class="file-size">${size} KB</span>
+                    <button class="remove-btn" data-index="${index}">&times;</button>
+                `;
+                filesUl.appendChild(li);
+            });
+
+            filesUl.querySelectorAll('.remove-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const index = parseInt(e.target.dataset.index);
+                    selectedFiles.splice(index, 1);
+                    updateFileList();
+                });
+            });
+        }
+
+        // Clear files
+        clearBtn.addEventListener('click', () => {
+            selectedFiles = [];
+            fileInput.value = '';
+            updateFileList();
+        });
+
+        // Upload
+        uploadBtn.addEventListener('click', async () => {
+            if (selectedFiles.length === 0) return;
+
+            const formData = new FormData();
+            selectedFiles.forEach(file => {
+                formData.append('files[]', file);
+            });
+
+            try {
+                showSection('progress');
+                progressFill.style.width = '0%';
+                progressText.textContent = 'Uploading...';
+
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    currentTaskId = data.task_id;
+                    startPolling();
+                } else {
+                    showError(data.error || 'Upload failed');
+                }
+            } catch (error) {
+                showError('Network error: ' + error.message);
+            }
+        });
+
+        // Poll status
+        function startPolling() {
+            pollInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`/status/${currentTaskId}`);
+                    const data = await response.json();
+
+                    if (!response.ok) {
+                        clearInterval(pollInterval);
+                        showError(data.error || 'Status check failed');
+                        return;
+                    }
+
+                    updateProgress(data);
+
+                    if (data.status === 'completed') {
+                        clearInterval(pollInterval);
+                        showResult(data);
+                    } else if (data.status === 'error') {
+                        clearInterval(pollInterval);
+                        showError(data.error || 'Processing failed');
+                    }
+                } catch (error) {
+                    clearInterval(pollInterval);
+                    showError('Network error: ' + error.message);
+                }
+            }, 1000);
+        }
+
+        // Update progress
+        function updateProgress(data) {
+            const statusText = {
+                'queued': 'Queued...',
+                'processing': `Recognizing (${data.current}/${data.total})`,
+                'organizing': 'Organizing files...',
+                'generating_report': 'Generating report...',
+                'packing': 'Packing download...'
+            };
+
+            progressText.textContent = statusText[data.status] || data.status;
+
+            if (data.total > 0) {
+                const percent = Math.round((data.current / data.total) * 100);
+                progressFill.style.width = percent + '%';
+            }
+
+            if (data.current_file) {
+                currentFile.textContent = data.current_file;
+            }
+        }
+
+        // Show result
+        function showResult(data) {
+            showSection('result');
+
+            summaryBody.innerHTML = '';
+            let totalInvoices = 0;
+            let totalSum = 0;
+
+            const categories = ['打车票', '火车飞机票', '住宿费', '餐费', '其他'];
+            categories.forEach(cat => {
+                const info = data.summary[cat];
+                if (info && info.count > 0) {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${categoryNames[cat] || cat}</td>
+                        <td>${info.count}</td>
+                        <td>¥${info.amount.toFixed(2)}</td>
+                    `;
+                    summaryBody.appendChild(tr);
+                    totalInvoices += info.count;
+                    totalSum += info.amount;
+                }
+            });
+
+            totalCount.textContent = totalInvoices;
+            totalAmount.textContent = '¥' + totalSum.toFixed(2);
+        }
+
+        // Download
+        downloadBtn.addEventListener('click', () => {
+            if (currentTaskId) {
+                window.location.href = `/download/${currentTaskId}`;
+            }
+        });
+
+        // Restart
+        restartBtn.addEventListener('click', reset);
+        retryBtn.addEventListener('click', reset);
+
+        function reset() {
+            selectedFiles = [];
+            currentTaskId = null;
+            fileInput.value = '';
+            updateFileList();
+            showSection('upload');
+        }
+
+        // Section management
+        function showSection(name) {
+            uploadSection.classList.add('hidden');
+            progressSection.classList.add('hidden');
+            resultSection.classList.add('hidden');
+            errorSection.classList.add('hidden');
+
+            if (name === 'upload') uploadSection.classList.remove('hidden');
+            if (name === 'progress') progressSection.classList.remove('hidden');
+            if (name === 'result') resultSection.classList.remove('hidden');
+            if (name === 'error') errorSection.classList.remove('hidden');
+        }
+
+        // Show error
+        function showError(message) {
+            errorMessage.textContent = message;
+            showSection('error');
+        }
+    </script>
+</body>
+</html>

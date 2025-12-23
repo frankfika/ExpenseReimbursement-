@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy - Invoice Assistant</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .privacy-content {
+            max-width: 640px;
+            margin: 0 auto;
+            padding: 60px 20px;
+        }
+        .privacy-content h1 {
+            font-size: 2.25rem;
+            font-weight: 700;
+            margin-bottom: 12px;
+            color: var(--text-primary);
+            letter-spacing: -0.025em;
+        }
+        .privacy-content .updated {
+            color: var(--text-tertiary);
+            margin-bottom: 40px;
+            font-size: 0.875rem;
+        }
+        .privacy-content h2 {
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin-top: 36px;
+            margin-bottom: 14px;
+            color: var(--text-primary);
+        }
+        .privacy-content p, .privacy-content li {
+            color: var(--text-secondary);
+            line-height: 1.75;
+            margin-bottom: 14px;
+            font-size: 0.9375rem;
+        }
+        .privacy-content ul {
+            margin-left: 20px;
+            margin-bottom: 14px;
+        }
+        .privacy-content li {
+            margin-bottom: 8px;
+        }
+        .privacy-content a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+        .privacy-content a:hover {
+            text-decoration: underline;
+        }
+        .privacy-content strong {
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            margin-bottom: 32px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            padding: 8px 14px;
+            background: var(--bg-white);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            transition: all var(--transition);
+        }
+        .back-link:hover {
+            color: var(--accent);
+            border-color: var(--accent);
+            background: var(--accent-bg);
+        }
+        .content-card {
+            background: var(--bg-white);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 32px;
+            box-shadow: var(--shadow-sm);
+        }
+    </style>
+</head>
+<body>
+    <div class="page-wrapper">
+        <div class="privacy-content">
+            <a href="/" class="back-link">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M19 12H5M12 19l-7-7 7-7"/>
+                </svg>
+                Back to Home
+            </a>
+
+            <div class="content-card">
+                <h1>Privacy Policy</h1>
+                <p class="updated">Last updated: December 2024</p>
+
+                <h2>Overview</h2>
+                <p>Invoice Assistant ("we", "our", or "the Service") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, and safeguard your information when you use our invoice processing service.</p>
+
+                <h2>Information We Collect</h2>
+                <p>When you use our Service, we may collect:</p>
+                <ul>
+                    <li><strong>Uploaded Files:</strong> Invoice images and PDF documents you upload for processing</li>
+                    <li><strong>Usage Data:</strong> Anonymous usage statistics to improve our service</li>
+                    <li><strong>Technical Data:</strong> Browser type, device information, and IP address for security purposes</li>
+                </ul>
+
+                <h2>How We Use Your Information</h2>
+                <p>Your uploaded files are used solely for:</p>
+                <ul>
+                    <li>Processing and recognizing invoice content using OCR technology</li>
+                    <li>Categorizing and organizing your invoices</li>
+                    <li>Generating expense reports</li>
+                </ul>
+
+                <h2>Data Retention & Deletion</h2>
+                <p>We prioritize your data security:</p>
+                <ul>
+                    <li>Uploaded files are automatically deleted within <strong>1 minute</strong> after download</li>
+                    <li>If not downloaded, files are deleted within <strong>30 minutes</strong></li>
+                    <li>We do not store your invoice data on our servers permanently</li>
+                    <li>No personal financial information is retained after processing</li>
+                </ul>
+
+                <h2>Third-Party Services</h2>
+                <p>We use the following third-party services:</p>
+                <ul>
+                    <li><strong>AI Processing:</strong> We use AI services to analyze invoice content. Only the extracted text is sent for analysis, not the original images.</li>
+                    <li><strong>Advertising:</strong> We use Google AdSense to display advertisements. Google may use cookies to serve ads based on your prior visits. You can opt out of personalized advertising by visiting <a href="https://www.google.com/settings/ads" target="_blank" rel="noopener">Google Ads Settings</a>.</li>
+                </ul>
+
+                <h2>Cookies</h2>
+                <p>We use essential cookies for the Service to function properly. Third-party advertising partners may also use cookies. You can control cookie preferences through your browser settings.</p>
+
+                <h2>Security</h2>
+                <p>We implement appropriate security measures to protect your data during transmission and processing. All connections are encrypted using HTTPS.</p>
+
+                <h2>Children's Privacy</h2>
+                <p>Our Service is not intended for children under 13. We do not knowingly collect personal information from children.</p>
+
+                <h2>Changes to This Policy</h2>
+                <p>We may update this Privacy Policy from time to time. We will notify you of any changes by posting the new Privacy Policy on this page and updating the "Last updated" date.</p>
+
+                <h2>Contact Us</h2>
+                <p>If you have any questions about this Privacy Policy, please contact us through our website.</p>
+            </div>
+        </div>
+
+        <footer>
+            <p>Invoice Assistant</p>
+            <div class="footer-links">
+                <a href="/">Home</a>
+                <a href="/privacy">Privacy Policy</a>
+            </div>
+        </footer>
+    </div>
+</body>
+</html>
