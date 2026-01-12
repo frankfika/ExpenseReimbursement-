@@ -66,20 +66,20 @@ jobs:
         cp -R "dist/${APP_NAME}.app" "$TEMP_DIR/"
         ln -s /Applications "$TEMP_DIR/Applications"
 
-        # 先创建一个临时 DMG
-        hdiutil create -volname "报销助手" \
+        # Create temporary DMG
+        hdiutil create -volname "ExpenseHelper" \
           -srcfolder "$TEMP_DIR" \
           -ov -format UDRW \
           "dist/${DMG_NAME}_temp.dmg"
 
-        # 挂载临时 DMG 并设置视图
+        # Mount and set Finder view
         mkdir -p "$DMG_TEMP_DIR"
         hdiutil attach "dist/${DMG_NAME}_temp.dmg" -mountpoint "$DMG_TEMP_DIR" -nobrowse -quiet
 
-        # 使用 AppleScript 设置 Finder 视图
-        osascript <<EOF
+        # Use AppleScript to set Finder view
+        osascript <<'EOF'
 tell application "Finder"
-  tell disk "报销助手"
+  tell disk "ExpenseHelper"
     open
     set current view of container window to icon view
     set toolbar visible of container window to false
@@ -88,7 +88,7 @@ tell application "Finder"
     set viewOptions to the icon view options of container window
     set arrangement of viewOptions to not arranged
     set icon size of viewOptions to 72
-    set position of item "报销助手.app" of container window to {125, 175}
+    set position of item "ExpenseHelper.app" of container window to {125, 175}
     set position of item "Applications" of container window to {375, 175}
     close
     update without registering applications
@@ -97,17 +97,16 @@ tell application "Finder"
 end tell
 EOF
 
-        # 同步并卸载
+        # Unmount and compress
         sync
         hdiutil detach "$DMG_TEMP_DIR" -quiet
 
-        # 压缩成最终 DMG
         hdiutil convert "dist/${DMG_NAME}_temp.dmg" \
           -format UDZO \
           -imagekey zlib-level=9 \
           -o "dist/${DMG_NAME}.dmg"
 
-        # 清理临时文件
+        # Cleanup
         rm -f "dist/${DMG_NAME}_temp.dmg"
         rm -rf "$TEMP_DIR" "$DMG_TEMP_DIR"
 

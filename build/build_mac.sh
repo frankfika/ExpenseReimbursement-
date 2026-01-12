@@ -49,7 +49,7 @@ if [ -d "dist/ExpenseHelper.app" ]; then
 
     # 创建 DMG
     APP_NAME="ExpenseHelper"
-    DMG_NAME="报销助手-${VERSION}"
+    DMG_NAME="ExpenseHelper-${VERSION}"
     TEMP_DIR="dist/dmg_temp"
     DMG_TEMP_DIR="dist/dmg_mount"
     RELEASE_DIR="releases/${VERSION_TAG}"
@@ -65,7 +65,7 @@ if [ -d "dist/ExpenseHelper.app" ]; then
     ln -s /Applications "$TEMP_DIR/Applications"
 
     # 先创建一个可读写的临时 DMG
-    hdiutil create -volname "报销助手" \
+    hdiutil create -volname "ExpenseHelper" \
         -srcfolder "$TEMP_DIR" \
         -ov -format UDRW \
         "dist/${DMG_NAME}_temp.dmg"
@@ -74,26 +74,25 @@ if [ -d "dist/ExpenseHelper.app" ]; then
     mkdir -p "$DMG_TEMP_DIR"
     hdiutil attach "dist/${DMG_NAME}_temp.dmg" -mountpoint "$DMG_TEMP_DIR" -nobrowse -quiet
 
-    # 使用 AppleScript 设置 Finder 视图
-    osascript <<EOF
-tell application "Finder"
-  tell disk "报销助手"
-    open
-    set current view of container window to icon view
-    set toolbar visible of container window to false
-    set statusbar visible of container window to false
-    set the bounds of container window to {400, 100, 900, 450}
-    set viewOptions to the icon view options of container window
-    set arrangement of viewOptions to not arranged
-    set icon size of viewOptions to 72
-    set position of item "ExpenseHelper.app" of container window to {125, 175}
-    set position of item "Applications" of container window to {375, 175}
-    close
-    update without registering applications
-    delay 2
-  end tell
-end tell
-EOF
+    # 等待 Finder 准备好
+    sleep 2
+
+    # 使用 AppleScript 设置 Finder 视图 - 通过挂载点路径访问
+    osascript -e "tell application \"Finder\"" \
+        -e "set theWindow to open POSIX file \"$DMG_TEMP_DIR\"" \
+        -e "set current view of theWindow to icon view" \
+        -e "set toolbar visible of theWindow to false" \
+        -e "set statusbar visible of theWindow to false" \
+        -e "set the bounds of theWindow to {400, 100, 900, 450}" \
+        -e "set viewOptions to icon view options of theWindow" \
+        -e "set arrangement of viewOptions to not arranged" \
+        -e "set icon size of viewOptions to 72" \
+        -e "set position of item \"ExpenseHelper.app\" of theWindow to {125, 175}" \
+        -e "set position of item \"Applications\" of theWindow to {375, 175}" \
+        -e "close theWindow" \
+        -e "update without registering applications" \
+        -e "end tell" \
+        2>/dev/null || true
 
     # 同步并卸载
     sync
