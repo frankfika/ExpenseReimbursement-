@@ -3,12 +3,12 @@
 block_cipher = None
 
 a = Analysis(
-    ['desktop_app.py'],
-    pathex=[],
+    ['../desktop_app.py'],
+    pathex=['../'],
     binaries=[],
     datas=[
-        ('web/templates', 'web/templates'),
-        ('web/static', 'web/static'),
+        ('../web/templates', 'web/templates'),
+        ('../web/static', 'web/static'),
     ],
     hiddenimports=[
         'webview',
