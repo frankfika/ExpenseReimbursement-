@@ -69,12 +69,12 @@ jobs:
       id: release_notes
       run: |
         VERSION="${{ steps.version.outputs.VERSION }}"
-        cat > release_notes.md << 'EOF'
+        cat > release_notes.md << EOF
         ## 报销助手 v${VERSION}
 
         ### 下载安装
-        - **macOS**: 下载 `报销助手-${VERSION}.dmg`，双击安装
-        - **Windows**: 下载 `报销助手-${VERSION}.exe`，双击安装
+        - **macOS**: 下载 \`报销助手-${VERSION}.dmg\`，双击安装
+        - **Windows**: 下载 \`报销助手-${VERSION}.exe\`，双击安装
 
         ### 本版本更新
         - 详细更新日志请查看 [CHANGELOG.md](https://github.com/frankfika/ExpenseReimbursement/blob/main/CHANGELOG.md)
