@@ -42,6 +42,16 @@ jobs:
           --hidden-import webview \
           --hidden-import flask \
           --hidden-import paddleocr \
+          --exclude-module tkinter \
+          --exclude-module matplotlib \
+          --exclude-module test \
+          --exclude-module unittest \
+          --exclude-module pydoc \
+          --exclude-module argparse \
+          --exclude-module http.server \
+          --exclude-module ssl \
+          --strip \
+          --optimize 2 \
           desktop_app.py
 
     - name: Create DMG
@@ -124,6 +134,16 @@ jobs:
           --hidden-import webview `
           --hidden-import flask `
           --hidden-import paddleocr `
+          --exclude-module tkinter `
+          --exclude-module matplotlib `
+          --exclude-module test `
+          --exclude-module unittest `
+          --exclude-module pydoc `
+          --exclude-module argparse `
+          --exclude-module http.server `
+          --exclude-module ssl `
+          --strip `
+          --optimize 2 `
           desktop_app.py
 
     - name: Rename with version
