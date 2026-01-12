@@ -1,0 +1,90 @@
+name: Build Desktop Apps
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.9'
+
+    - name: Install dependencies
+      run: |
+        pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Build with PyInstaller
+      run: |
+        pyinstaller --clean --onefile --windowed \
+          --name "报销助手" \
+          --add-data "templates:templates" \
+          --add-data "static:static" \
+          --hidden-import webview \
+          --hidden-import flask \
+          --hidden-import paddleocr \
+          desktop_app.py
+
+    - name: Create DMG
+      run: |
+        APP_NAME="报销助手"
+        DMG_NAME="报销助手-Installer"
+        TEMP_DIR="dist/dmg_temp"
+
+        mkdir -p "$TEMP_DIR"
+        cp -R "dist/${APP_NAME}.app" "$TEMP_DIR/"
+        ln -s /Applications "$TEMP_DIR/Applications"
+
+        hdiutil create -volname "$APP_NAME" \
+          -srcfolder "$TEMP_DIR" \
+          -ov -format UDZO \
+          "dist/${DMG_NAME}.dmg"
+
+    - name: Upload DMG
+      uses: actions/upload-artifact@v4
+      with:
+        name: macos-dmg
+        path: dist/报销助手-Installer.dmg
+        retention-days: 30
+
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.9'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Build with PyInstaller
+      run: |
+        pyinstaller --clean --onefile --windowed `
+          --name "报销助手" `
+          --add-data "templates;templates" `
+          --add-data "static;static" `
+          --hidden-import webview `
+          --hidden-import flask `
+          --hidden-import paddleocr `
+          desktop_app.py
+
+    - name: Upload EXE
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-exe
+        path: dist/报销助手.exe
+        retention-days: 30
