@@ -34,6 +34,7 @@ dist/
 build/build/
 build/*.spec.bak
 *.dylibs/
+build/build_mac/
 
 # Releases (保留目录结构，忽略构建产物)
 releases/v*/
