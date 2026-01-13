@@ -1,11 +1,11 @@
-"""发票分析模块 - 调用 DeepSeek API 分析发票内容"""
+"""发票分析模块 - 支持本地规则分析和 API 智能分析"""
 import json
 import re
 from dataclasses import dataclass, asdict
 from typing import Optional
 import requests
 
-from .config import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEEPSEEK_MODEL
+from .config import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEEPSEEK_MODEL, CATEGORY_KEYWORDS
 
 
 @dataclass
@@ -176,19 +176,197 @@ is_invoice 说明：
         )
 
 
+class LocalAnalyzer:
+    """本地规则分析器 - 无需 API，使用关键词和正则匹配"""
+
+    # 金额匹配模式
+    AMOUNT_PATTERNS = [
+        r'(?:合计|总计|实付|实收|金额|价税合计|应付|支付)[：:]*\s*[¥￥]?\s*(\d+\.?\d*)',
+        r'[¥￥]\s*(\d+\.?\d*)',
+        r'(\d+\.?\d*)\s*元',
+        r'(?:小计|总额)[：:]*\s*(\d+\.?\d*)',
+    ]
+
+    # 日期匹配模式
+    DATE_PATTERNS = [
+        r'(\d{4})[年\-/](\d{1,2})[月\-/](\d{1,2})[日号]?',
+        r'(\d{4})(\d{2})(\d{2})',  # 20240115 格式
+    ]
+
+    # 发票号码模�式
+    INVOICE_PATTERNS = [
+        r'发票号码[：:]*\s*(\d+)',
+        r'No[\.:]?\s*(\d+)',
+        r'发票代码[：:]*\s*(\d+)',
+    ]
+
+    def analyze(self, ocr_text: str, file_path: str) -> InvoiceInfo:
+        """使用本地规则分析发票"""
+        if not ocr_text.strip():
+            return self._create_empty_info(file_path, "无法识别内容")
+
+        # 识别类型
+        inv_type, subtype = self._detect_type(ocr_text)
+
+        # 提取金额
+        amount = self._extract_amount(ocr_text)
+
+        # 提取日期
+        date = self._extract_date(ocr_text)
+
+        # 提取发票号码
+        invoice_number = self._extract_invoice_number(ocr_text)
+
+        # 判断是否为正式发票
+        is_invoice = self._is_formal_invoice(ocr_text)
+
+        # 提取商家名称
+        merchant = self._extract_merchant(ocr_text)
+
+        return InvoiceInfo(
+            type=inv_type,
+            subtype=subtype,
+            amount=amount,
+            date=date,
+            service_date=date,  # 本地分析无法区分，使用相同日期
+            merchant=merchant,
+            invoice_number=invoice_number,
+            is_invoice=is_invoice,
+            description=f"本地识别: {subtype}",
+            raw_text=ocr_text,
+            file_path=file_path,
+            order_number=""
+        )
+
+    def _detect_type(self, text: str) -> tuple:
+        """检测发票类型"""
+        text_lower = text.lower()
+
+        for type_key, keywords in CATEGORY_KEYWORDS.items():
+            for keyword in keywords:
+                if keyword in text or keyword.lower() in text_lower:
+                    type_map = {
+                        'taxi': ('taxi', '打车出行'),
+                        'train': ('train', '火车票'),
+                        'flight': ('flight', '机票'),
+                        'hotel': ('hotel', '住宿'),
+                        'meal': ('meal', '餐饮'),
+                    }
+                    if type_key in type_map:
+                        return type_map[type_key]
+
+        return ('other', '其他')
+
+    def _extract_amount(self, text: str) -> float:
+        """提取金额"""
+        for pattern in self.AMOUNT_PATTERNS:
+            matches = re.findall(pattern, text)
+            if matches:
+                # 取最大金额（通常是合计）
+                amounts = [float(m) for m in matches if float(m) > 0]
+                if amounts:
+                    return max(amounts)
+        return 0.0
+
+    def _extract_date(self, text: str) -> str:
+        """提取日期"""
+        for pattern in self.DATE_PATTERNS:
+            match = re.search(pattern, text)
+            if match:
+                year, month, day = match.groups()
+                return f"{year}-{int(month):02d}-{int(day):02d}"
+        return ""
+
+    def _extract_invoice_number(self, text: str) -> str:
+        """提取发票号码"""
+        for pattern in self.INVOICE_PATTERNS:
+            match = re.search(pattern, text)
+            if match:
+                return match.group(1)
+        return ""
+
+    def _is_formal_invoice(self, text: str) -> bool:
+        """判断是否为正式发票"""
+        invoice_keywords = ['发票代码', '发票号码', '税额', '价税合计', '增值税', '电子发票']
+        return any(kw in text for kw in invoice_keywords)
+
+    def _extract_merchant(self, text: str) -> str:
+        """提取商家名称"""
+        # 尝试提取公司名称
+        patterns = [
+            r'销售方[：:]*\s*([^\n]+)',
+            r'(?:名称|公司)[：:]*\s*([^\n]+?(?:公司|店|餐厅|酒店))',
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, text)
+            if match:
+                return match.group(1).strip()[:50]  # 限制长度
+        return ""
+
+    def _create_empty_info(self, file_path: str, description: str) -> InvoiceInfo:
+        """创建空的发票信息"""
+        return InvoiceInfo(
+            type="other",
+            subtype="未识别",
+            amount=0.0,
+            date="",
+            service_date="",
+            merchant="",
+            invoice_number="",
+            is_invoice=False,
+            description=description,
+            raw_text="",
+            file_path=file_path,
+            order_number=""
+        )
+
+
 # 全局实例（延迟初始化）
-_analyzer = None
+_api_analyzer = None
+_local_analyzer = None
 
 
-def get_analyzer(api_key: str = None) -> InvoiceAnalyzer:
-    """获取分析器实例"""
-    global _analyzer
-    if _analyzer is None:
-        _analyzer = InvoiceAnalyzer(api_key)
-    return _analyzer
+def get_analyzer(api_key: str = None, use_api: bool = True) -> InvoiceAnalyzer:
+    """获取 API 分析器实例"""
+    global _api_analyzer
+    if _api_analyzer is None:
+        _api_analyzer = InvoiceAnalyzer(api_key)
+    return _api_analyzer
 
 
-def analyze_invoice(ocr_text: str, file_path: str, api_key: str = None) -> InvoiceInfo:
-    """便捷函数：分析发票"""
-    analyzer = get_analyzer(api_key)
-    return analyzer.analyze(ocr_text, file_path)
+def get_local_analyzer() -> LocalAnalyzer:
+    """获取本地分析器实例"""
+    global _local_analyzer
+    if _local_analyzer is None:
+        _local_analyzer = LocalAnalyzer()
+    return _local_analyzer
+
+
+def analyze_invoice(ocr_text: str, file_path: str, api_key: str = None, use_api: bool = True) -> InvoiceInfo:
+    """
+    分析发票
+
+    Args:
+        ocr_text: OCR 提取的文字
+        file_path: 文件路径
+        api_key: API Key（可选）
+        use_api: 是否使用 API（默认 True，如果有 API Key 则使用）
+
+    Returns:
+        InvoiceInfo 对象
+    """
+    # 决定使用哪种分析器
+    actual_api_key = api_key or DEEPSEEK_API_KEY
+
+    if use_api and actual_api_key:
+        # 使用 API 分析（更精准）
+        try:
+            analyzer = get_analyzer(actual_api_key)
+            return analyzer.analyze(ocr_text, file_path)
+        except Exception as e:
+            print(f"  [API 分析失败，回退到本地分析] {e}")
+            # API 失败时回退到本地分析
+            return get_local_analyzer().analyze(ocr_text, file_path)
+    else:
+        # 使用本地分析
+        return get_local_analyzer().analyze(ocr_text, file_path)

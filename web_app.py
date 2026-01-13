@@ -22,7 +22,19 @@ from app import DEEPSEEK_API_KEY, INVOICE_CATEGORIES, is_configured, setup_wizar
 from app import extract_text_from_file, is_supported_file
 from app import analyze_invoice, InvoiceInfo, FileOrganizer, generate_report
 
-app = Flask(__name__, template_folder='web/templates', static_folder='web/static')
+# 确定模板和静态文件夹路径（支持打包环境）
+import sys
+if getattr(sys, 'frozen', False):
+    # PyInstaller 打包环境
+    base_path = sys._MEIPASS
+    template_folder = os.path.join(base_path, 'web', 'templates')
+    static_folder = os.path.join(base_path, 'web', 'static')
+else:
+    # 开发环境
+    template_folder = 'web/templates'
+    static_folder = 'web/static'
+
+app = Flask(__name__, template_folder=template_folder, static_folder=static_folder)
 
 # 配置
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB 总上传限制
@@ -199,6 +211,40 @@ def index():
     return render_template('index.html', configured=configured)
 
 
+@app.route('/settings')
+def settings():
+    """设置页面"""
+    from app.config import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEEPSEEK_MODEL
+    return render_template('settings.html',
+                         configured=is_configured(),
+                         api_key=DEEPSEEK_API_KEY[:8] + '...' if DEEPSEEK_API_KEY and len(DEEPSEEK_API_KEY) > 8 else '',
+                         base_url=DEEPSEEK_BASE_URL,
+                         model=DEEPSEEK_MODEL)
+
+
+@app.route('/save-settings', methods=['POST'])
+def save_settings():
+    """保存设置"""
+    from app.config import save_config
+    data = request.get_json()
+    api_key = data.get('api_key', '').strip()
+    base_url = data.get('base_url', 'https://api.siliconflow.cn').strip()
+    model = data.get('model', 'deepseek-ai/DeepSeek-V3').strip()
+
+    if not api_key:
+        return jsonify({'error': 'API Key 不能为空'}), 400
+
+    try:
+        save_config(api_key, base_url, model)
+        # 重新加载配置
+        global DEEPSEEK_API_KEY
+        from app.config import DEEPSEEK_API_KEY as new_key
+        DEEPSEEK_API_KEY = new_key
+        return jsonify({'success': True, 'message': '配置已保存'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/privacy')
 def privacy():
     """隐私政策页面"""
@@ -208,6 +254,16 @@ def privacy():
 @app.route('/upload', methods=['POST'])
 def upload():
     """处理文件上传"""
+    # API Key 可选 - 没有时使用本地分析模式
+
+    # 检查是否是原生路径上传（桌面应用）
+    if request.is_json:
+        data = request.get_json()
+        file_paths = data.get('paths', [])
+        if file_paths:
+            return upload_from_paths(file_paths)
+
+    # 常规文件上传
     if 'files[]' not in request.files:
         return jsonify({'error': '没有上传文件'}), 400
 
@@ -215,10 +271,6 @@ def upload():
 
     if not files or all(f.filename == '' for f in files):
         return jsonify({'error': '没有选择文件'}), 400
-
-    # 检查 API 配置
-    if not DEEPSEEK_API_KEY:
-        return jsonify({'error': '服务器未配置 API Key'}), 500
 
     # 创建任务
     task_id = str(uuid.uuid4())
@@ -246,6 +298,62 @@ def upload():
             file_path = os.path.join(temp_dir, filename)
             file.save(file_path)
             saved_count += 1
+
+    if saved_count == 0:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        shutil.rmtree(output_dir, ignore_errors=True)
+        return jsonify({'error': '没有有效的文件（仅支持 jpg/png/pdf）'}), 400
+
+    # 初始化任务状态
+    with tasks_lock:
+        tasks[task_id] = {
+            'status': 'queued',
+            'temp_dir': temp_dir,
+            'output_dir': output_dir,
+            'total': saved_count,
+            'current': 0,
+            'created_at': datetime.now().isoformat()
+        }
+
+    # 启动后台处理
+    thread = threading.Thread(target=process_task, args=(task_id,), daemon=True)
+    thread.start()
+
+    return jsonify({
+        'task_id': task_id,
+        'file_count': saved_count
+    })
+
+
+def upload_from_paths(file_paths):
+    """从本地文件路径上传（桌面应用使用）"""
+    task_id = str(uuid.uuid4())
+    temp_dir = tempfile.mkdtemp(prefix=f"reimbursement_input_{task_id}_")
+    output_dir = tempfile.mkdtemp(prefix=f"reimbursement_output_{task_id}_")
+
+    saved_count = 0
+    seen_filenames = set()
+
+    for src_path in file_paths:
+        if not os.path.exists(src_path):
+            continue
+        filename = os.path.basename(src_path)
+        if not allowed_file(filename):
+            continue
+
+        # 处理同名文件
+        original_filename = filename
+        counter = 1
+        while filename in seen_filenames:
+            name, ext = os.path.splitext(original_filename)
+            filename = f"{name}_{counter}{ext}"
+            counter += 1
+        seen_filenames.add(filename)
+
+        # 复制文件到临时目录
+        dst_path = os.path.join(temp_dir, filename)
+        shutil.copy2(src_path, dst_path)
+        saved_count += 1
 
     if saved_count == 0:
         shutil.rmtree(temp_dir, ignore_errors=True)

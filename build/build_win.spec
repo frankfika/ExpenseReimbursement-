@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-# 报销助手 - macOS 打包配置
+# 报销助手 - Windows 打包配置
 
 import sys
 import os
@@ -33,10 +33,12 @@ a = Analysis(
         'itsdangerous',
         'click',
         'markupsafe',
-        # Webview
+        # Webview - Windows
         'webview',
         'webview.platforms',
-        'webview.platforms.cocoa',
+        'webview.platforms.edgechromium',
+        'webview.platforms.mshtml',
+        'webview.platforms.cef',
         # 核心功能
         'PIL',
         'PIL._tkinter_finder',
@@ -107,6 +109,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=None,  # 可以添加 ico 图标
 )
 
 coll = COLLECT(
@@ -118,20 +121,4 @@ coll = COLLECT(
     upx=True,
     upx_exclude=[],
     name='ExpenseHelper',
-)
-
-app = BUNDLE(
-    coll,
-    name='ExpenseHelper.app',
-    icon=None,
-    bundle_identifier='com.expense.helper',
-    info_plist={
-        'CFBundleName': 'ExpenseHelper',
-        'CFBundleDisplayName': 'ExpenseHelper',
-        'CFBundleVersion': '1.0.0',
-        'CFBundleShortVersionString': '1.0.0',
-        'NSHighResolutionCapable': True,
-        'LSMinimumSystemVersion': '10.13.0',
-        'NSRequiresAquaSystemAppearance': False,
-    },
 )

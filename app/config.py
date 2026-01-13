@@ -1,10 +1,29 @@
 """配置管理模块"""
 import os
+import sys
 from pathlib import Path
 from dotenv import load_dotenv
 
+
+def get_config_dir() -> Path:
+    """获取配置目录（支持打包环境）"""
+    if getattr(sys, 'frozen', False):
+        # PyInstaller 打包环境 - 使用用户目录
+        if sys.platform == 'darwin':
+            config_dir = Path.home() / 'Library' / 'Application Support' / 'ExpenseHelper'
+        elif sys.platform == 'win32':
+            config_dir = Path(os.environ.get('APPDATA', '')) / 'ExpenseHelper'
+        else:
+            config_dir = Path.home() / '.config' / 'ExpenseHelper'
+        config_dir.mkdir(parents=True, exist_ok=True)
+        return config_dir
+    else:
+        # 开发环境
+        return Path(__file__).parent
+
+
 # 配置文件路径
-CONFIG_DIR = Path(__file__).parent
+CONFIG_DIR = get_config_dir()
 ENV_FILE = CONFIG_DIR / ".env"
 
 # 加载 .env 文件

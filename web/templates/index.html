@@ -16,8 +16,9 @@
             </header>
 
             {% if not configured %}
-            <div class="warning-banner">
-                <strong>Warning:</strong> API Key not configured. Please run setup wizard in terminal.
+            <div class="info-banner" style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem; color: #1e40af;">
+                <strong>Local Mode:</strong> Using local OCR analysis.
+                <a href="/settings" style="color: #1e40af; text-decoration: underline; margin-left: 0.5rem;">Configure API for better accuracy</a>
             </div>
             {% endif %}
 
@@ -227,16 +228,64 @@
             return files;
         }
 
+        // Check if running in pywebview (desktop app)
+        const isDesktopApp = typeof window.pywebview !== 'undefined';
+
         // Button events
-        selectFilesBtn.addEventListener('click', (e) => {
+        selectFilesBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
-            fileInput.click();
+            if (isDesktopApp && window.pywebview.api) {
+                // 桌面应用：使用原生对话框
+                try {
+                    const files = await window.pywebview.api.select_files();
+                    handleNativeFiles(files);
+                } catch (err) {
+                    console.error('Select files error:', err);
+                    // 降级到 HTML input
+                    fileInput.click();
+                }
+            } else {
+                // 浏览器：使用 HTML input
+                fileInput.click();
+            }
         });
 
-        selectFolderBtn.addEventListener('click', (e) => {
+        selectFolderBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
-            folderInput.click();
+            if (isDesktopApp && window.pywebview.api) {
+                // 桌面应用：使用原生文件夹对话框
+                try {
+                    const files = await window.pywebview.api.select_folder();
+                    handleNativeFiles(files);
+                } catch (err) {
+                    console.error('Select folder error:', err);
+                    // 降级到 HTML input
+                    folderInput.click();
+                }
+            } else {
+                // 浏览器：使用 HTML input
+                folderInput.click();
+            }
         });
+
+        // Handle files from native dialog (returns file info objects with path)
+        function handleNativeFiles(files) {
+            if (!files || files.length === 0) return;
+
+            for (const fileInfo of files) {
+                // 创建一个类似 File 对象的结构
+                const fileObj = {
+                    name: fileInfo.name,
+                    size: fileInfo.size,
+                    path: fileInfo.path,  // 原生路径
+                    isNative: true
+                };
+                if (!selectedFiles.find(f => f.name === fileObj.name && f.size === fileObj.size)) {
+                    selectedFiles.push(fileObj);
+                }
+            }
+            updateFileList();
+        }
 
         fileInput.addEventListener('change', (e) => {
             handleFiles(e.target.files);
@@ -305,20 +354,37 @@
         uploadBtn.addEventListener('click', async () => {
             if (selectedFiles.length === 0) return;
 
-            const formData = new FormData();
-            selectedFiles.forEach(file => {
-                formData.append('files[]', file);
-            });
-
             try {
                 showSection('progress');
                 progressFill.style.width = '0%';
                 progressText.textContent = 'Uploading...';
 
-                const response = await fetch('/upload', {
-                    method: 'POST',
-                    body: formData
-                });
+                let response;
+
+                // 检查是否有原生文件（带有 path 属性）
+                const hasNativeFiles = selectedFiles.some(f => f.isNative && f.path);
+
+                if (hasNativeFiles) {
+                    // 使用 JSON 发送文件路径（桌面应用）
+                    const paths = selectedFiles.filter(f => f.path).map(f => f.path);
+                    response = await fetch('/upload', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ paths: paths })
+                    });
+                } else {
+                    // 使用 FormData 上传文件（浏览器）
+                    const formData = new FormData();
+                    selectedFiles.forEach(file => {
+                        formData.append('files[]', file);
+                    });
+                    response = await fetch('/upload', {
+                        method: 'POST',
+                        body: formData
+                    });
+                }
 
                 const data = await response.json();
 
