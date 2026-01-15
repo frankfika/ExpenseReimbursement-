@@ -229,15 +229,18 @@
         }
 
         // Check if running in pywebview (desktop app)
-        const isDesktopApp = typeof window.pywebview !== 'undefined';
+        function isDesktopApp() {
+            return typeof window.pywebview !== 'undefined';
+        }
 
         // Button events
         selectFilesBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
-            if (isDesktopApp && window.pywebview.api) {
+            if (isDesktopApp()) {
                 // 桌面应用：使用原生对话框
                 try {
                     const files = await window.pywebview.api.select_files();
+                    console.log('select_files 返回:', files);
                     handleNativeFiles(files);
                 } catch (err) {
                     console.error('Select files error:', err);
@@ -252,10 +255,11 @@
 
         selectFolderBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
-            if (isDesktopApp && window.pywebview.api) {
+            if (isDesktopApp()) {
                 // 桌面应用：使用原生文件夹对话框
                 try {
                     const files = await window.pywebview.api.select_folder();
+                    console.log('select_folder 返回:', files);
                     handleNativeFiles(files);
                 } catch (err) {
                     console.error('Select folder error:', err);
@@ -479,8 +483,42 @@
         }
 
         // Download
-        downloadBtn.addEventListener('click', () => {
-            if (currentTaskId) {
+        downloadBtn.addEventListener('click', async () => {
+            if (!currentTaskId) return;
+
+            if (isDesktopApp()) {
+                // 桌面应用：使用 pywebview API 下载
+                try {
+                    downloadBtn.disabled = true;
+                    downloadBtn.textContent = 'Downloading...';
+
+                    const result = await window.pywebview.api.download_file(
+                        `/download/${currentTaskId}`,
+                        `报销结果_${new Date().toISOString().slice(0,10).replace(/-/g,'')}.zip`
+                    );
+
+                    if (result.success) {
+                        downloadBtn.textContent = 'Download Complete!';
+                        setTimeout(() => {
+                            downloadBtn.disabled = false;
+                            downloadBtn.textContent = 'Download Results (ZIP)';
+                        }, 2000);
+                    } else if (!result.cancelled) {
+                        alert('Download failed: ' + (result.error || 'Unknown error'));
+                        downloadBtn.disabled = false;
+                        downloadBtn.textContent = 'Download Results (ZIP)';
+                    } else {
+                        downloadBtn.disabled = false;
+                        downloadBtn.textContent = 'Download Results (ZIP)';
+                    }
+                } catch (err) {
+                    console.error('Download error:', err);
+                    alert('Download error: ' + err.message);
+                    downloadBtn.disabled = false;
+                    downloadBtn.textContent = 'Download Results (ZIP)';
+                }
+            } else {
+                // 浏览器：使用常规下载
                 window.location.href = `/download/${currentTaskId}`;
             }
         });
